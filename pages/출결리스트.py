@@ -148,6 +148,52 @@ def update_student(student_id, status, reason, started):
 
 
 def add_student(name):
+def rename_student(student_id, new_name):
+    """학생 이름을 변경합니다."""
+    new_name = new_name.strip()
+
+    if not new_name:
+        return False, "새로운 이름을 입력해 주세요."
+
+    try:
+        updated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        with connect_db() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE students
+                SET name = ?, updated = ?
+                WHERE id = ?
+                """,
+                (new_name, updated, student_id),
+            )
+
+            if cursor.rowcount == 0:
+                return False, "학생 정보를 찾을 수 없습니다."
+
+        return True, f"학생 이름을 '{new_name}'으로 변경했습니다."
+
+    except sqlite3.IntegrityError:
+        return False, "이미 등록된 이름입니다."
+
+
+def delete_student(student_id):
+    """선택한 학생을 데이터베이스에서 삭제합니다."""
+    try:
+        with connect_db() as conn:
+            cursor = conn.execute(
+                "DELETE FROM students WHERE id = ?",
+                (student_id,),
+            )
+
+            if cursor.rowcount == 0:
+                return False, "학생 정보를 찾을 수 없습니다."
+
+        return True, "학생을 삭제했습니다."
+
+    except sqlite3.Error:
+        return False, "삭제에 실패했습니다. 다시 시도해 주세요."
+
     name = name.strip()
 
     if not name:
