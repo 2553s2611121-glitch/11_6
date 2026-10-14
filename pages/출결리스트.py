@@ -1,4 +1,8 @@
 
+streamlit
+pandas
+streamlit-autorefresh
+
 import time
 from datetime import datetime
 
