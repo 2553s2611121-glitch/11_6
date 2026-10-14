@@ -1,459 +1,524 @@
 
-streamlit
-pandas
-streamlit-autorefresh
 
+import sqlite3
 import time
 from datetime import datetime
+from pathlib import Path
 
 import pandas as pd
 import streamlit as st
-from streamlit_autorefresh import st_autorefresh
 
 
-# -------------------------------
+# =========================================
 # 1. 기본 설정
-# -------------------------------
+# =========================================
 st.set_page_config(
-    page_title="출결 관리 시스템",
+    page_title="스마트 출결 관리",
     page_icon="📋",
     layout="wide",
 )
 
-# 1초마다 화면을 갱신해 타이머를 표시
-st_autorefresh(interval=1000, key="page_refresh")
+DB_PATH = Path(__file__).resolve().parent / "attendance.db"
+TIME_LIMIT = 30 * 60
+
+STATUS_OPTIONS = ["출석", "지각", "결석", "무단 결과"]
 
 
-# -------------------------------
+# =========================================
 # 2. 디자인
-# -------------------------------
+# =========================================
 st.markdown("""
 <style>
-    .stApp {
-        background-color: #F5F7FB;
-    }
-    [data-testid="stSidebar"] {
-        background-color: #172F50;
-    }
-    [data-testid="stSidebar"] * {
-        color: white;
-    }
-    .main-title {
-        color: #17365D;
-        font-size: 32px;
-        font-weight: 800;
-        margin-bottom: 3px;
-    }
-    .sub-title {
-        color: #738198;
-        font-size: 14px;
-        margin-bottom: 22px;
-    }
-    .info-card {
-        background: white;
-        padding: 20px;
-        border: 1px solid #E5EAF2;
-        border-radius: 14px;
-        margin-bottom: 12px;
-    }
-    .small-label {
-        color: #718096;
-        font-size: 14px;
-    }
-    .big-number {
-        color: #17365D;
-        font-size: 30px;
-        font-weight: 800;
-    }
-    .timer {
-        color: #DC4545;
-        font-size: 27px;
-        font-weight: 800;
-    }
-    div.stButton > button {
-        border-radius: 9px;
-        font-weight: 600;
-    }
+.stApp {
+    background: #F4F7FB;
+}
+.block-container {
+    padding-top: 2rem;
+    padding-bottom: 3rem;
+}
+[data-testid="stSidebar"] {
+    background: #17365D;
+}
+[data-testid="stSidebar"] * {
+    color: white;
+}
+.dashboard-title {
+    color: #17365D;
+    font-size: 32px;
+    font-weight: 800;
+}
+.dashboard-subtitle {
+    color: #758399;
+    margin-bottom: 20px;
+}
+.metric-card {
+    background: white;
+    padding: 18px;
+    border-radius: 14px;
+    border: 1px solid #E4EAF2;
+}
+.metric-label {
+    color: #758399;
+    font-size: 14px;
+}
+.metric-number {
+    color: #17365D;
+    font-size: 30px;
+    font-weight: 800;
+}
+div.stButton > button {
+    border-radius: 9px;
+}
 </style>
 """, unsafe_allow_html=True)
 
 
-# -------------------------------
-# 3. 예시 학생 데이터
-# -------------------------------
-if "students" not in st.session_state:
+# =========================================
+# 3. 데이터베이스
+# =========================================
+def connect_db():
+    conn = sqlite3.connect(
+        str(DB_PATH),
+        timeout=10,
+    )
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db():
+    with connect_db() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS students (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL DEFAULT '출석',
+                reason TEXT NOT NULL DEFAULT '-',
+                started REAL,
+                updated TEXT NOT NULL
+            )
+        """)
+
+        count = conn.execute(
+            "SELECT COUNT(*) FROM students"
+        ).fetchone()[0]
+
+        if count == 0:
+            now = time.time()
+            today = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            demo_students = [
+                ("김도현", "출석", "-", None, today),
+                ("이서연", "출석", "-", None, today),
+                ("박지민", "출석", "-", None, today),
+                ("최예은", "지각", "-", None, today),
+                ("정민준", "출석", "-", None, today),
+                ("한지민", "결석", "미확인", now, today),
+                ("강민서", "출석", "-", None, today),
+                ("이준호", "출석", "-", None, today),
+                ("유나영", "결석", "질병(감기)", None, today),
+                ("신동우", "출석", "-", None, today),
+            ]
+
+            conn.executemany("""
+                INSERT OR IGNORE INTO students
+                (name, status, reason, started, updated)
+                VALUES (?, ?, ?, ?, ?)
+            """, demo_students)
+
+
+def get_students():
+    with connect_db() as conn:
+        rows = conn.execute("""
+            SELECT id, name, status, reason, started, updated
+            FROM students
+            ORDER BY id
+        """).fetchall()
+    return [dict(row) for row in rows]
+
+
+def update_student(student_id, status, reason, started):
+    updated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    with connect_db() as conn:
+        conn.execute("""
+            UPDATE students
+            SET status = ?, reason = ?, started = ?, updated = ?
+            WHERE id = ?
+        """, (status, reason, started, updated, student_id))
+
+
+def add_student(name):
+    name = name.strip()
+
+    if not name:
+        return False, "학생 이름을 입력해 주세요."
+
+    try:
+        updated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        with connect_db() as conn:
+            conn.execute("""
+                INSERT INTO students
+                (name, status, reason, started, updated)
+                VALUES (?, '출석', '-', NULL, ?)
+            """, (name, updated))
+
+        return True, f"{name} 학생을 등록했습니다."
+
+    except sqlite3.IntegrityError:
+        return False, "이미 등록된 학생 이름입니다."
+
+
+# =========================================
+# 4. 타이머 처리
+# =========================================
+def process_timers():
     now = time.time()
+    students = get_students()
 
-    st.session_state.students = [
-        {"name": "김도현", "status": "출석",
-         "reason": "-", "started": None},
-        {"name": "이서연", "status": "출석",
-         "reason": "-", "started": None},
-        {"name": "박지민", "status": "출석",
-         "reason": "-", "started": None},
-        {"name": "최예은", "status": "지각",
-         "reason": "-", "started": None},
-        {"name": "정민준", "status": "출석",
-         "reason": "-", "started": None},
-        {"name": "한지민", "status": "결석",
-         "reason": "미확인", "started": now},
-        {"name": "강민서", "status": "출석",
-         "reason": "-", "started": None},
-        {"name": "이준호", "status": "출석",
-         "reason": "-", "started": None},
-        {"name": "유나영", "status": "결석",
-         "reason": "질병(감기)", "started": None},
-        {"name": "신동우", "status": "출석",
-         "reason": "-", "started": None},
-        {"name": "조하은", "status": "출석",
-         "reason": "-", "started": None},
-        {"name": "성지윤", "status": "출석",
-         "reason": "-", "started": None},
-        {"name": "윤서준", "status": "무단 결과",
-         "reason": "미제출", "started": now - 1900},
-        {"name": "이다은", "status": "출석",
-         "reason": "-", "started": None},
-    ]
+    for student in students:
+        if (
+            student["status"] == "결석"
+            and student["reason"] == "미확인"
+            and student["started"] is not None
+            and now - student["started"] >= TIME_LIMIT
+        ):
+            update_student(
+                student["id"],
+                "무단 결과",
+                "30분 내 사유 미확인",
+                None,
+            )
 
 
-students = st.session_state.students
-
-
-# -------------------------------
-# 4. 타이머 및 자동 처리
-# -------------------------------
-now = time.time()
-
-for student in students:
+def format_remaining(student):
     if (
-        student["status"] == "결석"
-        and student["reason"] == "미확인"
-        and student["started"] is not None
+        student["status"] != "결석"
+        or student["reason"] != "미확인"
+        or student["started"] is None
     ):
-        elapsed = now - student["started"]
+        return "-"
 
-        if elapsed >= 1800:
-            student["status"] = "무단 결과"
-            student["reason"] = "미제출"
+    remaining = max(
+        0,
+        TIME_LIMIT - int(time.time() - student["started"]),
+    )
+
+    return f"{remaining // 60:02d}:{remaining % 60:02d}"
 
 
-# -------------------------------
-# 5. 왼쪽 메뉴
-# -------------------------------
+# =========================================
+# 5. 안전한 초기화
+# =========================================
+try:
+    init_db()
+    process_timers()
+except (sqlite3.Error, OSError) as exc:
+    st.error("데이터베이스를 준비하지 못했습니다.")
+    st.caption(f"오류 내용: {exc}")
+    st.stop()
+
+
+# =========================================
+# 6. 사이드바
+# =========================================
 with st.sidebar:
-    st.markdown("## 📋 출결 관리")
+    st.markdown("## 📋 스마트 출결")
     st.caption("SCHOOL ATTENDANCE")
     st.divider()
 
     page = st.radio(
         "메뉴",
-        ["출석 현황", "출결 기록", "학생 관리"],
-        label_visibility="collapsed",
+        ["출석 현황", "학생 관리", "출결 기록"],
     )
 
     st.divider()
-    st.caption("시제품 · 가상 학생 데이터")
+    st.caption("시제품 · 가상 데이터")
 
 
-# -------------------------------
-# 6. 출석 현황 페이지
-# -------------------------------
+# =========================================
+# 7. 출석 현황
+# =========================================
 if page == "출석 현황":
-
     st.markdown(
-        '<div class="main-title">출석 현황</div>',
+        '<div class="dashboard-title">출석 현황</div>',
         unsafe_allow_html=True,
     )
     st.markdown(
-        '<div class="sub-title">'
-        '학생들의 출석 상태와 미확인 결석을 관리합니다.'
+        '<div class="dashboard-subtitle">'
+        '학생들의 출결 상태와 결석 사유를 관리합니다.'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    top1, top2 = st.columns([1, 1])
+    students = get_students()
 
-    with top1:
-        selected_date = st.date_input(
-            "조회 날짜",
-            value=datetime.now().date(),
+    counts = {
+        status: sum(
+            s["status"] == status for s in students
         )
+        for status in STATUS_OPTIONS
+    }
 
-    with top2:
-        selected_class = st.selectbox(
-            "학급",
-            ["2학년 3반"],
-        )
+    cols = st.columns(4)
 
-    # 요약 통계
-    count_present = sum(
-        s["status"] == "출석" for s in students
-    )
-    count_late = sum(
-        s["status"] == "지각" for s in students
-    )
-    count_absent = sum(
-        s["status"] == "결석" for s in students
-    )
-    count_unexcused = sum(
-        s["status"] == "무단 결과" for s in students
-    )
+    icons = {
+        "출석": "🟢",
+        "지각": "🟠",
+        "결석": "🔴",
+        "무단 결과": "⚠️",
+    }
 
-    metrics = st.columns(4)
-
-    metric_data = [
-        ("출석", count_present, "🟢"),
-        ("지각", count_late, "🟠"),
-        ("결석", count_absent, "🔴"),
-        ("무단 결과", count_unexcused, "⚠️"),
-    ]
-
-    for col, (label, value, emoji) in zip(
-        metrics, metric_data
-    ):
+    for col, status in zip(cols, STATUS_OPTIONS):
         with col:
             st.markdown(
                 f"""
-                <div class="info-card">
-                    <div class="small-label">
-                        {emoji} {label}
+                <div class="metric-card">
+                    <div class="metric-label">
+                        {icons[status]} {status}
                     </div>
-                    <div class="big-number">{value}명</div>
+                    <div class="metric-number">
+                        {counts[status]}명
+                    </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-    st.divider()
-
-    # 검색 및 필터
-    st.subheader("학생 출결 목록")
+    st.write("")
 
     search_col, filter_col = st.columns([2, 1])
 
     with search_col:
-        search_name = st.text_input(
+        keyword = st.text_input(
             "🔎 학생 검색",
-            placeholder="학생 이름을 입력하세요",
+            placeholder="이름으로 검색",
         )
 
     with filter_col:
         status_filter = st.selectbox(
-            "출결 상태 필터",
-            ["전체", "출석", "지각", "결석", "무단 결과"],
+            "출결 상태",
+            ["전체"] + STATUS_OPTIONS,
         )
 
-    # 표 데이터 만들기
-    rows = []
+    filtered = []
 
-    for student in students:
-        if (
-            search_name
-            and search_name not in student["name"]
-        ):
+    for s in students:
+        if keyword and keyword not in s["name"]:
             continue
-
-        if (
-            status_filter != "전체"
-            and status_filter != student["status"]
-        ):
+        if status_filter != "전체" and s["status"] != status_filter:
             continue
+        filtered.append(s)
 
-        timer_text = "-"
+    table_rows = [
+        {
+            "학생 이름": s["name"],
+            "출결 상태": s["status"],
+            "결석 사유": s["reason"],
+            "남은 시간": format_remaining(s),
+            "최근 변경": s["updated"],
+        }
+        for s in filtered
+    ]
 
-        if (
-            student["status"] == "결석"
-            and student["reason"] == "미확인"
-            and student["started"] is not None
-        ):
-            remaining = max(
-                0,
-                1800 - int(time.time() - student["started"]),
-            )
-            timer_text = (
-                f"{remaining // 60:02d}:"
-                f"{remaining % 60:02d}"
-            )
+    st.subheader("학생 출결 목록")
 
-        rows.append({
-            "학생 이름": student["name"],
-            "출석 상태": student["status"],
-            "결석 사유": student["reason"],
-            "남은 시간": timer_text,
-        })
+    st.dataframe(
+        pd.DataFrame(
+            table_rows,
+            columns=[
+                "학생 이름",
+                "출결 상태",
+                "결석 사유",
+                "남은 시간",
+                "최근 변경",
+            ],
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
 
-    if rows:
-        st.dataframe(
-            pd.DataFrame(rows),
-            use_container_width=True,
-            hide_index=True,
-        )
-    else:
-        st.info("검색 결과가 없습니다.")
+    st.caption(f"총 {len(filtered)}명 표시")
 
-    st.caption(
-        f"{selected_date.strftime('%Y-%m-%d')} · "
-        f"{selected_class} · 총 {len(rows)}명 표시"
+    # CSV 내려받기
+    csv_data = pd.DataFrame(table_rows).to_csv(
+        index=False
+    ).encode("utf-8-sig")
+
+    st.download_button(
+        "📥 출결 현황 CSV 다운로드",
+        data=csv_data,
+        file_name=f"attendance_{datetime.now():%Y%m%d}.csv",
+        mime="text/csv",
     )
 
     st.divider()
-
-    # 결석 사유 확인
     st.subheader("⏱️ 결석 사유 확인")
 
     unresolved = [
         s for s in students
-        if (
-            s["status"] == "결석"
-            and s["reason"] == "미확인"
-        )
+        if s["status"] == "결석"
+        and s["reason"] == "미확인"
     ]
 
     if unresolved:
-        selected_name = st.selectbox(
-            "사유를 확인할 학생",
-            [s["name"] for s in unresolved],
-        )
-
-        selected_student = next(
-            s for s in unresolved
-            if s["name"] == selected_name
-        )
-
-        remaining = max(
-            0,
-            1800 - int(
-                time.time() - selected_student["started"]
+        selected_id = st.selectbox(
+            "확인할 학생",
+            options=[s["id"] for s in unresolved],
+            format_func=lambda sid: next(
+                s["name"] for s in unresolved
+                if s["id"] == sid
             ),
         )
 
-        st.markdown(
-            f"""
-            <div class="info-card">
-                <div class="small-label">
-                    {selected_student['name']} ·
-                    결석 사유 미확인
-                </div>
-                <div class="timer">
-                    ⏱️ {remaining // 60:02d}:
-                    {remaining % 60:02d}
-                </div>
-                <div class="small-label">
-                    사유가 30분 이내에 확인되지 않으면
-                    무단 결과로 처리됩니다.
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
+        selected = next(
+            s for s in unresolved
+            if s["id"] == selected_id
         )
+
+        st.warning(
+            f"{selected['name']} 학생의 결석 사유가 확인되지 않았습니다."
+        )
+
+        st.metric("남은 시간", format_remaining(selected))
 
         with st.form("reason_form"):
             reason = st.text_input(
                 "확인된 결석 사유",
-                placeholder="예: 병원 진료, 질병",
+                placeholder="예: 질병, 병원 진료",
             )
 
-            submitted = st.form_submit_button(
+            confirmed = st.form_submit_button(
                 "사유 확인 완료",
                 type="primary",
-                use_container_width=True,
             )
 
-            if submitted:
+            if confirmed:
                 if reason.strip():
-                    selected_student["reason"] = reason.strip()
-                    selected_student["started"] = None
-                    st.success(
-                        f"{selected_name} 학생의 사유가 기록되었습니다."
+                    update_student(
+                        selected["id"],
+                        "결석",
+                        reason.strip(),
+                        None,
                     )
+                    st.success("결석 사유를 기록했습니다.")
                     st.rerun()
                 else:
-                    st.error("결석 사유를 입력해 주세요.")
+                    st.error("사유를 입력해 주세요.")
 
     else:
-        st.success("현재 확인 대기 중인 결석이 없습니다.")
-
-    st.divider()
+        st.success("확인 대기 중인 결석이 없습니다.")
 
     # 테스트용 결석 등록
-    with st.expander("🧪 시제품 테스트: 결석 등록"):
-        st.caption(
-            "실제 출결 앱 연결 전, 타이머 기능을 시험하기 위한 메뉴입니다."
-        )
-
+    with st.expander("🧪 테스트: 미확인 결석 등록"):
         eligible = [
-            s["name"] for s in students
+            s for s in students
             if s["status"] in ["출석", "지각"]
         ]
 
         if eligible:
-            absent_name = st.selectbox(
-                "결석으로 변경할 학생",
-                eligible,
-                key="test_absent_name",
+            target_id = st.selectbox(
+                "학생 선택",
+                options=[s["id"] for s in eligible],
+                format_func=lambda sid: next(
+                    s["name"] for s in eligible
+                    if s["id"] == sid
+                ),
+                key="absent_student",
             )
 
-            if st.button("미확인 결석 등록"):
+            if st.button("30분 타이머 시작"):
                 target = next(
-                    s for s in students
-                    if s["name"] == absent_name
+                    s for s in eligible
+                    if s["id"] == target_id
                 )
-                target["status"] = "결석"
-                target["reason"] = "미확인"
-                target["started"] = time.time()
+                update_student(
+                    target["id"],
+                    "결석",
+                    "미확인",
+                    time.time(),
+                )
                 st.rerun()
 
-
-# -------------------------------
-# 7. 출결 기록 페이지
-# -------------------------------
-elif page == "출결 기록":
-    st.title("🗂️ 출결 기록")
-    st.caption("현재 시제품에 기록된 출결 상태")
-
-    history_rows = [
-        {
-            "학생 이름": s["name"],
-            "출석 상태": s["status"],
-            "결석 사유": s["reason"],
-        }
-        for s in students
-        if s["status"] != "출석"
-    ]
-
-    if history_rows:
-        st.dataframe(
-            pd.DataFrame(history_rows),
-            use_container_width=True,
-            hide_index=True,
-        )
-    else:
-        st.info("표시할 출결 기록이 없습니다.")
+    # 미확인 결석이 있을 때만 주기적으로 갱신
+    if unresolved:
+        time.sleep(1)
+        st.rerun()
 
 
-# -------------------------------
-# 8. 학생 관리 페이지
-# -------------------------------
+# =========================================
+# 8. 학생 관리
+# =========================================
 elif page == "학생 관리":
     st.title("👥 학생 관리")
-    st.caption("현재 시제품에 등록된 학생 목록")
+    st.caption("학생을 등록하고 목록을 확인합니다.")
+
+    with st.form("add_student_form"):
+        new_name = st.text_input(
+            "학생 이름",
+            placeholder="이름 입력",
+        )
+        add_submitted = st.form_submit_button(
+            "학생 등록",
+            type="primary",
+        )
+
+        if add_submitted:
+            success, message = add_student(new_name)
+
+            if success:
+                st.success(message)
+                st.rerun()
+            else:
+                st.error(message)
+
+    students = get_students()
+
+    st.subheader("등록된 학생")
 
     st.dataframe(
         pd.DataFrame([
-            {"번호": i + 1, "학생 이름": s["name"]}
+            {
+                "번호": i + 1,
+                "이름": s["name"],
+                "출결 상태": s["status"],
+            }
             for i, s in enumerate(students)
         ]),
         use_container_width=True,
         hide_index=True,
     )
 
-    st.info(
-        "이 버전은 예시 학생 목록을 사용합니다. "
-        "실제 학생 등록 및 저장 기능은 추후 추가할 수 있습니다."
-    )
+
+# =========================================
+# 9. 출결 기록
+# =========================================
+elif page == "출결 기록":
+    st.title("🗂️ 출결 기록")
+    st.caption("현재 학생별 출결 상태와 사유를 확인합니다.")
+
+    students = get_students()
+
+    records = [
+        {
+            "학생 이름": s["name"],
+            "출결 상태": s["status"],
+            "결석 사유": s["reason"],
+            "최근 변경": s["updated"],
+        }
+        for s in students
+        if s["status"] != "출석" or s["reason"] != "-"
+    ]
+
+    if records:
+        st.dataframe(
+            pd.DataFrame(records),
+            use_container_width=True,
+            hide_index=True,
+        )
+    else:
+        st.info("표시할 기록이 없습니다.")
 
 st.caption(
-    "출결 관리 시제품 · 예시 데이터 전용 · "
-    "실제 출결 시스템과 연결되지 않음"
+    "스마트 출결 관리 시제품 | 예시 데이터 사용"
 )
-
