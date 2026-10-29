@@ -13,55 +13,65 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# Custom CSS for Baby Pink Theme & UI Layout Matching
+# Custom CSS for White Background + Baby Pink Buttons
 # ---------------------------------------------------------
 st.markdown("""
     <style>
-    /* 전체 배경을 밝은 베이비 핑크 톤으로 설정 */
-    .stApp {
-        background-color: #FFF5F7;
+    /* 전체 배경 및 사이드바 배경: 하얀색 */
+    .stApp, section[data-testid="stSidebar"] {
+        background-color: #FFFFFF !important;
     }
     
-    /* 사이드바 스타일링 */
     section[data-testid="stSidebar"] {
-        background-color: #FDF2F4;
-        border-right: 1px solid #FFE3E8;
+        border-right: 1px solid #F1F5F9;
     }
 
     /* 메인 타이틀 & 텍스트 색상 */
     h1, h2, h3 {
-        color: #5C3D46 !important;
+        color: #334155 !important;
     }
     p, span, label {
-        color: #6C4E57;
+        color: #475569;
     }
 
-    /* 버튼 공통 스타일 (베이비 핑크 포인트) */
+    /* 버튼 공통 스타일 (베이비 핑크) */
     div.stButton > button {
-        background-color: #FF8FAB !important;
+        background-color: #FFB3C1 !important;
         color: white !important;
-        border-radius: 10px !important;
+        border-radius: 8px !important;
         border: none !important;
         font-weight: 600 !important;
         padding: 0.5rem 1rem !important;
-        transition: all 0.3s ease !important;
+        transition: all 0.2s ease !important;
     }
     div.stButton > button:hover {
-        background-color: #FB6F92 !important;
-        box-shadow: 0 4px 10px rgba(251, 111, 146, 0.3) !important;
+        background-color: #FF8FAB !important;
+        box-shadow: 0 4px 10px rgba(255, 143, 171, 0.3) !important;
     }
 
-    /* Primary 버튼 (바로가기 버튼 등) */
+    /* Primary 버튼 (바로가기 버튼 등 강조 버튼) */
     div.stButton > button[kind="primary"] {
-        background-color: #FF758F !important;
+        background-color: #FF8FAB !important;
     }
     div.stButton > button[kind="primary"]:hover {
-        background-color: #E85D75 !important;
+        background-color: #FB6F92 !important;
     }
 
-    /* 검색창 연동 스타일 */
+    /* Link Button (사이트 바로가기 버튼) */
+    a[data-testid="stLinkButton"] {
+        background-color: #FFB3C1 !important;
+        color: white !important;
+        border-radius: 8px !important;
+        border: none !important;
+        font-weight: 600 !important;
+    }
+    a[data-testid="stLinkButton"]:hover {
+        background-color: #FF8FAB !important;
+    }
+
+    /* 검색창 스타일링 */
     .stTextInput > div > div > input {
-        border-radius: 10px !important;
+        border-radius: 8px !important;
         border: 1.5px solid #FFCCD5 !important;
         background-color: #FFFFFF !important;
     }
@@ -70,43 +80,43 @@ st.markdown("""
         box-shadow: 0 0 0 2px rgba(255, 143, 171, 0.2) !important;
     }
 
-    /* 4대 기능 카드 스타일 (파스텔 핑크 세부 톤 적용) */
+    /* 4대 기능 카드 스타일 (하얀 배경 + 은은한 핑크 테두리) */
     .card-container {
         background-color: #FFFFFF;
-        border-radius: 16px;
-        padding: 22px;
+        border-radius: 14px;
+        padding: 20px;
         border: 1px solid #FFE3E8;
-        box-shadow: 0 4px 15px rgba(255, 182, 193, 0.15);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
         height: 100%;
         margin-bottom: 10px;
     }
     
     .card-icon {
-        font-size: 2.2rem;
-        width: 50px;
-        height: 50px;
+        font-size: 2rem;
+        width: 48px;
+        height: 48px;
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 12px;
+        border-radius: 10px;
         margin-bottom: 12px;
     }
 
-    /* 각 카드의 소프트 아이콘 배경 */
+    /* 각 카드 소프트 아이콘 배경 */
     .bg-pink-1 { background-color: #FFF0F3; color: #FF758F; }
     .bg-pink-2 { background-color: #FFE5EC; color: #FF8FAB; }
     .bg-pink-3 { background-color: #FFD6FF; color: #D883FF; }
     .bg-pink-4 { background-color: #FFE4E6; color: #FB7185; }
 
     .card-title {
-        font-size: 1.2rem;
+        font-size: 1.15rem;
         font-weight: 700;
-        color: #4A3138;
+        color: #1E293B;
         margin-bottom: 6px;
     }
     .card-desc {
         font-size: 0.88rem;
-        color: #7A5C65;
+        color: #64748B;
         margin-bottom: 15px;
         min-height: 42px;
         line-height: 1.4;
@@ -115,17 +125,16 @@ st.markdown("""
     /* 최근 사용 기능 / 사이트 가이드 박스 */
     .info-card {
         background-color: #FFFFFF;
-        border-radius: 16px;
+        border-radius: 14px;
         padding: 20px;
         border: 1px solid #FFE3E8;
-        box-shadow: 0 4px 15px rgba(255, 182, 193, 0.1);
     }
 
     /* Expander 핑크 톤 적용 */
     .streamlit-expanderHeader {
-        background-color: #FFF0F3 !important;
+        background-color: #FFF5F7 !important;
         border-radius: 8px !important;
-        color: #5C3D46 !important;
+        color: #334155 !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -202,10 +211,10 @@ st.sidebar.caption("❓ 도움이 필요하신가요?\n고객센터: 1588-1234")
 
 
 # ---------------------------------------------------------
-# Page 1: 홈 (베이비 핑크 대시보드 - 이미지 레이아웃 준수)
+# Page 1: 홈 (하얀 배경 + 베이비 핑크 버튼 대시보드)
 # ---------------------------------------------------------
 if st.session_state.current_page == "홈":
-    st.title("안녕하세요! 🌸")
+    st.title("안녕하세요!")
     st.write("출결 관리를 더 쉽고 편리하게, 지금 바로 시작해보세요.")
 
     # 1. 검색창 영역
@@ -259,7 +268,7 @@ if st.session_state.current_page == "홈":
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. 주요 4가지 기능 카드 레이아웃 (베이비 핑크 톤 반영)
+    # 2. 주요 4가지 기능 카드 레이아웃
     c1, c2, c3, c4 = st.columns(4)
 
     with c1:
@@ -320,7 +329,7 @@ if st.session_state.current_page == "홈":
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 3. 최근 사용한 기능 & 사이트 사용 가이드 (2열 레이아웃)
+    # 3. 최근 사용한 기능 & 사이트 사용 가이드
     bot_col1, bot_col2 = st.columns(2)
 
     with bot_col1:
