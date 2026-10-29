@@ -57,7 +57,7 @@ st.markdown("""
         background-color: #FB6F92 !important;
     }
 
-    /* Link Button (사이트 바로가기 버튼) */
+    /* Link Button (외부 사이트 링크 버튼) */
     a[data-testid="stLinkButton"] {
         background-color: #FFB3C1 !important;
         color: white !important;
@@ -202,6 +202,7 @@ selected_label = st.sidebar.radio(
     index=list(page_options.keys()).index(st.session_state.current_page)
 )
 
+# 사이드바 선택 변경 시 세션 페이지 업데이트
 for key, val in page_options.items():
     if val == selected_label:
         st.session_state.current_page = key
@@ -211,7 +212,7 @@ st.sidebar.caption("❓ 도움이 필요하신가요?\n고객센터: 1588-1234")
 
 
 # ---------------------------------------------------------
-# Page 1: 홈 (하얀 배경 + 베이비 핑크 버튼 대시보드)
+# Page 1: 홈 (내부 페이지 연동 바로가기 버튼 적용)
 # ---------------------------------------------------------
 if st.session_state.current_page == "홈":
     st.title("안녕하세요!")
@@ -234,18 +235,23 @@ if st.session_state.current_page == "홈":
     
     if kw_col1.button("학생 결석 처리", use_container_width=True):
         st.session_state.current_page = "출결 기록"
+        add_recent_feature("오늘 출결 기록", "오늘의 출석 현황 확인 및 결석 처리")
         st.rerun()
     if kw_col2.button("지각 수정", use_container_width=True):
         st.session_state.current_page = "출결 기록"
+        add_recent_feature("오늘 출결 기록", "지각 현황 수정 및 기록")
         st.rerun()
     if kw_col3.button("출결 통계", use_container_width=True):
         st.session_state.current_page = "출결 기록"
+        add_recent_feature("오늘 출결 기록", "학급 출결 통계 확인")
         st.rerun()
     if kw_col4.button("학부모에게 문자 보내기", use_container_width=True):
         st.session_state.current_page = "자동 문자"
+        add_recent_feature("학부모 문자 발송", "출결 관련 문자를 발송 및 연동")
         st.rerun()
     if kw_col5.button("출석 기록 확인", use_container_width=True):
         st.session_state.current_page = "출결 기록"
+        add_recent_feature("오늘 출결 기록", "전체 출석 기록 확인")
         st.rerun()
 
     # 검색 입력 처리
@@ -254,23 +260,27 @@ if st.session_state.current_page == "홈":
             st.info(f"🔍 '{search_query}' 검색 결과: **[출결 기록]** 페이지로 이동합니다.")
             if st.button("출결 기록 페이지로 이동"):
                 st.session_state.current_page = "출결 기록"
+                add_recent_feature("오늘 출결 기록", "출결 기록 페이지 접근")
                 st.rerun()
         elif any(k in search_query for k in ["문자", "발송", "알림"]):
             st.info(f"🔍 '{search_query}' 검색 결과: **[자동 문자]** 페이지로 이동합니다.")
             if st.button("자동 문자 페이지로 이동"):
                 st.session_state.current_page = "자동 문자"
+                add_recent_feature("학부모 문자 발송", "자동 문자 페이지 접근")
                 st.rerun()
         elif any(k in search_query for k in ["학생", "명단", "학부모"]):
             st.info(f"🔍 '{search_query}' 검색 결과: **[학생 관리 / 학부모 연결]** 페이지로 이동합니다.")
             if st.button("학부모 연결 페이지로 이동"):
                 st.session_state.current_page = "학부모 연결"
+                add_recent_feature("결석 학생 확인", "학부모 연결 페이지 접근")
                 st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. 주요 4가지 기능 카드 레이아웃
+    # 2. 주요 4가지 기능 카드 레이아웃 (내부 페이지 바로가기 연결)
     c1, c2, c3, c4 = st.columns(4)
 
+    # [카드 1] 리스트 페이지 바로가기
     with c1:
         st.markdown("""
         <div class="card-container">
@@ -279,12 +289,17 @@ if st.session_state.current_page == "홈":
             <div class="card-desc">학생 명단 및 반/그룹을 관리할 수 있어요.</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("바로가기 ➔", key="btn_list", type="primary", use_container_width=True):
+        if st.button("바로가기 ➔", key="btn_goto_list", type="primary", use_container_width=True):
             st.session_state.current_page = "리스트"
             add_recent_feature("학생 관리 (리스트)", "학생 명단 및 반 정보 관리")
             st.rerun()
-        st.caption("🔗 **[사용 방법]** 학생 추가·수정·반 배정 방법 보기")
+        
+        # 하단 사용 방법 클릭 시 해당 페이지로 안내
+        if st.button("🔗 [사용 방법] 학생 추가 방법", key="guide_list", use_container_width=True):
+            st.session_state.current_page = "리스트"
+            st.rerun()
 
+    # [카드 2] 출결 기록 페이지 바로가기
     with c2:
         st.markdown("""
         <div class="card-container">
@@ -293,12 +308,16 @@ if st.session_state.current_page == "홈":
             <div class="card-desc">출석, 지각, 결석 등 출결 상태를 기록하고 관리할 수 있어요.</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("바로가기 ➔", key="btn_record", type="primary", use_container_width=True):
+        if st.button("바로가기 ➔", key="btn_goto_record", type="primary", use_container_width=True):
             st.session_state.current_page = "출결 기록"
             add_recent_feature("오늘 출결 기록", "오늘의 출석 현황 확인 및 처리")
             st.rerun()
-        st.caption("🔗 **[사용 방법]** 출석 처리 및 출결 수정 방법 보기")
+        
+        if st.button("🔗 [사용 방법] 출석 처리 방법", key="guide_record", use_container_width=True):
+            st.session_state.current_page = "출결 기록"
+            st.rerun()
 
+    # [카드 3] 학부모 연결 페이지 바로가기
     with c3:
         st.markdown("""
         <div class="card-container">
@@ -307,12 +326,16 @@ if st.session_state.current_page == "홈":
             <div class="card-desc">학부모 연락처를 관리하고 소통할 수 있어요.</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("바로가기 ➔", key="btn_parents", type="primary", use_container_width=True):
+        if st.button("바로가기 ➔", key="btn_goto_parents", type="primary", use_container_width=True):
             st.session_state.current_page = "학부모 연결"
             add_recent_feature("결석 학생 확인", "미확인 결석 학생 명단 및 비상 연락처 조회")
             st.rerun()
-        st.caption("🔗 **[사용 방법]** 학부모 정보 등록 및 연결 방법 보기")
+        
+        if st.button("🔗 [사용 방법] 학부모 정보 등록", key="guide_parents", use_container_width=True):
+            st.session_state.current_page = "학부모 연결"
+            st.rerun()
 
+    # [카드 4] 자동 문자 페이지 바로가기
     with c4:
         st.markdown("""
         <div class="card-container">
@@ -321,11 +344,14 @@ if st.session_state.current_page == "홈":
             <div class="card-desc">출결 상황에 따른 문자 발송 및 예약을 할 수 있어요.</div>
         </div>
         """, unsafe_allow_html=True)
-        if st.button("바로가기 ➔", key="btn_sms", type="primary", use_container_width=True):
+        if st.button("바로가기 ➔", key="btn_goto_sms", type="primary", use_container_width=True):
             st.session_state.current_page = "자동 문자"
             add_recent_feature("학부모 문자 발송", "출결 관련 문자를 발송 및 외부 발송 연동")
             st.rerun()
-        st.caption("🔗 **[사용 방법]** 문자 작성·예약·자동 발송 방법 보기")
+            
+        if st.button("🔗 [사용 방법] 문자 발송 방법", key="guide_sms", use_container_width=True):
+            st.session_state.current_page = "자동 문자"
+            st.rerun()
 
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -334,14 +360,14 @@ if st.session_state.current_page == "홈":
 
     with bot_col1:
         st.markdown("### 💡 최근 사용한 기능")
-        st.caption("선생님이 최근에 접근하신 메뉴 항목들입니다.")
+        st.caption("선생님이 최근에 바로가기 버튼으로 이용하신 기능입니다.")
         for rf in st.session_state.recent_features:
             with st.expander(f"📌 {rf['name']} ({rf['time']})"):
                 st.write(rf['desc'])
 
     with bot_col2:
         st.markdown("### 📖 사이트 사용 가이드")
-        st.caption("각 기능 및 발송 서비스의 자세한 사용 방법을 확인해보세요.")
+        st.caption("각 기능 및 외부 발송 서비스의 자세한 사용 방법을 확인해보세요.")
         
         guides = [
             ("나이스(NEIS) 교무업무 문자 서비스", "https://www.neis.go.kr", "나이스 교무업무 -> 학급담임 -> 출결관리 -> SMS 발송 메뉴 이용"),
