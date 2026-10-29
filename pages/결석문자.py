@@ -11,7 +11,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# 결석 학생 데이터 구조 초기화
+# 기본 학생 데이터 초기화
 if "students" not in st.session_state:
     st.session_state.students = [
         {
@@ -41,7 +41,7 @@ if "students" not in st.session_state:
     ]
 
 
-# 20분(1200초) 초과 시 자동으로 무단결과 전환하는 검사 함수
+# 20분(1200초) 초과 시 무단결과 처리
 def update_statuses():
     current_time = time.time()
     for student in st.session_state.students:
@@ -51,17 +51,17 @@ def update_statuses():
                 student["status"] = "무단결과"
 
 
-# 매 실행/새로고침시 타임아웃 상태 체크
+# 상태 체크
 update_statuses()
 
 # ==========================================
 # 2. 메인 화면 타이틀 및 사이드바
 # ==========================================
 st.title("🏫 미통보 결석 학생 사유 확인 시스템")
-st.caption("안내 문자 발송 후 **20분 이내**에 결석 사유를 미제출할 경우 자동으로 **무단결과** 처리됩니다.")
+st.caption("안내 문자 발송 후 **20분 이내**에 결석 사유를 제출하지 않으면 자동으로 **무단결과** 처리됩니다.")
 st.markdown("---")
 
-# 사이드바: 신규 결석 학생 추가
+# 사이드바: 신규 학생 등록 및 실시간 타이머 토글
 with st.sidebar:
     st.header("➕ 결석 학생 등록")
     with st.form("add_student_form", clear_on_submit=True):
@@ -82,85 +82,103 @@ with st.sidebar:
                         "reason": "",
                     }
                 )
-                st.success(f"{input_name} 학생이 목록에 추가되었습니다.")
+                st.success(f"{input_name} 학생이 추가되었습니다.")
                 st.rerun()
             else:
                 st.error("학번, 이름, 연락처를 모두 입력해주세요.")
 
     st.markdown("---")
-    st.caption("💡 대기시간(타이머)을 실시간으로 갱신하려면 아래 버튼을 누르세요.")
-    if st.button("🔄 화면 / 타이머 새로고침", use_container_width=True):
+    st.header("⏱️ 타이머 설정")
+    auto_refresh = st.checkbox("타이머 실시간 1초 자동 갱신", value=True)
+    if st.button("🔄 수동 새로고침", use_container_width=True):
         st.rerun()
 
 # ==========================================
-# 3. 메인 탭 구성 (교사용 / 학생용)
+# 3. 메인 탭 구성
 # ==========================================
-tab_teacher, tab_student = st.tabs(["📱 교사용 - 결석 관리 & 문자 발송", "📩 학생용 - 사유 제출 페이지"])
+tab_teacher, tab_student = st.tabs(["📱 교사용 - 학생별 타이머 관리", "📩 학생용 - 사유 제출 페이지"])
 
 # ------------------------------------------
-# TAB 1: 교사용 화면
+# TAB 1: 교사용 화면 (개별 타이머 포함)
 # ------------------------------------------
 with tab_teacher:
-    st.subheader("📋 결석 학생 관리 현황")
+    st.subheader("📋 결석 학생 명단 및 개별 타이머")
 
     if not st.session_state.students:
         st.info("현재 등록된 결석 학생이 없습니다.")
     else:
-        # 주요 상태 요약 지표
+        # 요약 메트릭
         total_cnt = len(st.session_state.students)
         pending_cnt = sum(1 for s in st.session_state.students if s["status"] == "문자발송 완료")
         done_cnt = sum(1 for s in st.session_state.students if s["status"] == "사유제출 완료")
         absent_cnt = sum(1 for s in st.session_state.students if s["status"] == "무단결과")
 
         m1, m2, m3, m4 = st.columns(4)
-        m1.metric("총 결석 학생", f"{total_cnt}명")
-        m2.metric("답변 대기 (20분 이내)", f"{pending_cnt}명")
+        m1.metric("총 결석 인원", f"{total_cnt}명")
+        m2.metric("답변 대기 (20분)", f"{pending_cnt}명")
         m3.metric("사유 제출 완료", f"{done_cnt}명")
         m4.metric("🚨 무단결과 처리", f"{absent_cnt}명")
 
         st.markdown("---")
 
-        # 학생별 항목 출력
-        for idx, student in enumerate(st.session_state.students):
-            col_info, col_status, col_action, col_delete = st.columns([2, 3, 2, 1])
+        # 학생별 카드가 들어갈 컨테이너 생성
+        student_list_container = st.container()
 
-            # 학생 정보
-            col_info.markdown(f"**{student['id']} {student['name']}**\n\n📱 `{student['phone']}`")
+        with student_list_container:
+            for idx, student in enumerate(st.session_state.students):
+                col_info, col_timer, col_action, col_delete = st.columns([2.5, 3.5, 2, 1])
 
-            # 상태 표시
-            if student["status"] == "미응답":
-                col_status.info("⚪ 문자 미발송")
-            elif student["status"] == "문자발송 완료":
-                elapsed_sec = int(time.time() - student["sent_time"])
-                remain_sec = max(0, 1200 - elapsed_sec)
-                col_status.warning(
-                    f"⏳ **답변 대기 중**\n\n남은 시간: **{remain_sec // 60}분 {remain_sec % 60}초**"
-                )
-            elif student["status"] == "사유제출 완료":
-                col_status.success(f"✅ **사유 제출 완료**\n\n사유: {student['reason']}")
-            elif student["status"] == "무단결과":
-                col_status.error("🚨 **무단결과 처리** (20분 초과 미응답)")
+                # 1. 학생 기본 정보
+                col_info.markdown(f"### {student['name']}\n`{student['id']}` | 📱 `{student['phone']}`")
 
-            # 행동 버튼
-            if student["status"] == "미응답":
-                if col_action.button("📱 문자 발송", key=f"send_btn_{idx}", use_container_width=True):
-                    student["status"] = "문자발송 완료"
-                    student["sent_time"] = time.time()
-                    st.toast(f"{student['name']} 학생에게 안내 문자를 보냈습니다.")
+                # 2. 학생 칸마다 개별 타이머 및 상태 표시
+                if student["status"] == "미응답":
+                    col_timer.info("⚪ **문자 미발송**\n\n문자 발송 시 20분 타이머가 시작됩니다.")
+                
+                elif student["status"] == "문자발송 완료":
+                    elapsed = int(time.time() - student["sent_time"])
+                    remain = max(0, 1200 - elapsed)
+                    min_left = remain // 60
+                    sec_left = remain % 60
+                    
+                    # 프로그레스 바 비율 계산 (1200초 기준)
+                    progress_val = min(1.0, max(0.0, remain / 1200))
+                    
+                    if remain > 0:
+                        col_timer.warning(
+                            f"⏳ **답변 대기 중 (남은 시간)**\n\n"
+                            f"### ⏱️ `{min_left:02d}분 {sec_left:02d}초`"
+                        )
+                        col_timer.progress(progress_val)
+                    else:
+                        col_timer.error("🚨 **20분 초과: 무단결과 전환 중...**")
+                
+                elif student["status"] == "사유제출 완료":
+                    col_timer.success(f"✅ **사유 제출 완료**\n\n**사유:** {student['reason']}")
+                
+                elif student["status"] == "무단결과":
+                    col_timer.error("🚨 **무단결과 처리됨**\n\n20분 동안 사유를 제출하지 않았습니다.")
+
+                # 3. 행동 버튼
+                if student["status"] == "미응답":
+                    if col_action.button("📱 문자 발송", key=f"send_btn_{idx}", use_container_width=True):
+                        student["status"] = "문자발송 완료"
+                        student["sent_time"] = time.time()
+                        st.toast(f"{student['name']} 학생에게 문자를 보냈습니다.")
+                        st.rerun()
+                else:
+                    if student["sent_time"]:
+                        formatted_time = time.strftime("%H:%M:%S", time.localtime(student["sent_time"]))
+                        col_action.caption(f"발송시각:\n{formatted_time}")
+
+                # 4. 삭제 버튼
+                if col_delete.button("🗑️", key=f"del_btn_{idx}"):
+                    st.session_state.students.pop(idx)
                     st.rerun()
-            else:
-                if student["sent_time"]:
-                    formatted_time = time.strftime("%H:%M:%S", time.localtime(student["sent_time"]))
-                    col_action.caption(f"발송시각: {formatted_time}")
 
-            # 삭제 버튼
-            if col_delete.button("🗑️", key=f"del_btn_{idx}"):
-                st.session_state.students.pop(idx)
-                st.rerun()
+                st.divider()
 
-            st.divider()
-
-        # CSV 다운로드
+        # CSV 다운로드 기능
         df = pd.DataFrame(st.session_state.students)
         if not df.empty:
             df_export = df[["id", "name", "phone", "status", "reason"]].copy()
@@ -174,39 +192,38 @@ with tab_teacher:
             )
 
 # ------------------------------------------
-# TAB 2: 학생용 제출 시뮬레이션 화면
+# TAB 2: 학생용 사유 제출 화면
 # ------------------------------------------
 with tab_student:
     st.subheader("📩 학생용 결석 사유 제출")
-    st.caption("실제 운영시 문자로 수신된 링크를 눌러 들어오는 제출 화면입니다.")
 
     waiting_list = [s for s in st.session_state.students if s["status"] == "문자발송 완료"]
 
     if not waiting_list:
-        st.info("현재 사유를 제출할 대기 학생이 없습니다. (교사용 탭에서 문자를 먼저 발송해주세요.)")
+        st.info("현재 결석 사유를 제출할 대기 학생이 없습니다. (교사용 탭에서 문자를 먼저 발송해 주세요.)")
     else:
         student_options = [f"{s['id']} {s['name']} ({s['phone']})" for s in waiting_list]
-        selected_option = st.selectbox("제출할 학생 선택", student_options)
+        selected_option = st.selectbox("학생 선택", student_options)
 
         if selected_option:
             selected_id = selected_option.split()[0]
             curr_student = next(s for s in st.session_state.students if s["id"] == selected_id)
 
-            # 남은시간 계산
             elapsed = int(time.time() - curr_student["sent_time"])
             remain = max(0, 1200 - elapsed)
 
             if remain <= 0:
-                st.error("⚠️ 제한시간(20분)이 지나 무단결과 처리되었습니다. 담임교사에게 직접 문의하세요.")
+                st.error("⚠️ 제출 가능 시간(20분)이 지나 무단결과 처리되었습니다. 담임교사에게 문의해 주세요.")
             else:
                 st.warning(
                     f"⏰ 제출 남은 시간: **{remain // 60}분 {remain % 60}초** (시간 초과 시 자동으로 무단결과 처리됨)"
                 )
+                st.progress(remain / 1200)
 
                 with st.form("student_reason_form"):
                     user_reason = st.text_area(
                         "결석 사유를 입력하세요",
-                        placeholder="예: 발열 및 몽살 기운으로 병원 진료 후 등교 예정입니다.",
+                        placeholder="예: 독감 증세로 병원 진료 후 등교 예정입니다.",
                     )
                     submit_reason = st.form_submit_button("사유 제출하기", use_container_width=True)
 
@@ -214,7 +231,14 @@ with tab_student:
                         if user_reason.strip():
                             curr_student["status"] = "사유제출 완료"
                             curr_student["reason"] = user_reason.strip()
-                            st.success("결석 사유가 정상적으로 제출되었습니다.")
+                            st.success("결석 사유가 제출되었습니다.")
                             st.rerun()
                         else:
-                            st.error("결석 사유를 입력해주세요.")
+                            st.error("사유를 입력해 주세요.")
+
+# ==========================================
+# 4. 1초 자동 새로고침 (타이머 실시간 작동)
+# ==========================================
+if auto_refresh and any(s["status"] == "문자발송 완료" for s in st.session_state.students):
+    time.sleep(1)
+    st.rerun()
