@@ -325,3 +325,400 @@ if submitted:
         st.write("지각 사유:", reason)
         if detail.strip():
             st.write("추가 설명:", detail)
+
+import streamlit as st
+import sqlite3
+from datetime import datetime, date, timedelta
+
+st.set_page_config(
+    page_title="지각알리미.py",
+    page_icon="⏰",
+    layout="wide"
+)
+
+DB = "jigak.db"
+
+
+# 데이터베이스 생성
+def init_db():
+    with sqlite3.connect(DB) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS students (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                class_name TEXT NOT NULL,
+                student_phone TEXT,
+                parent_phone TEXT
+            )
+        """)
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                student_id INTEGER,
+                report_date TEXT,
+                student_info TEXT DEFAULT '',
+                reason TEXT DEFAULT '',
+                detail TEXT DEFAULT '',
+                status TEXT DEFAULT '응답 대기',
+                due_at TEXT,
+                FOREIGN KEY(student_id) REFERENCES students(id)
+            )
+        """)
+
+
+def get_students():
+    with sqlite3.connect(DB) as conn:
+        conn.row_factory = sqlite3.Row
+        return conn.execute(
+            "SELECT * FROM students ORDER BY class_name, name"
+        ).fetchall()
+
+
+def get_reports():
+    with sqlite3.connect(DB) as conn:
+        conn.row_factory = sqlite3.Row
+        return conn.execute("""
+            SELECT r.*, s.name, s.class_name
+            FROM reports r
+            JOIN students s ON s.id = r.student_id
+            ORDER BY r.id DESC
+        """).fetchall()
+
+
+init_db()
+
+st.title("⏰ 지각알리미.py")
+st.caption("지각·결석 사유 설문 및 응답 관리 시스템")
+
+# 메뉴
+page = st.sidebar.radio(
+    "메뉴",
+    [
+        "대시보드",
+        "학생 관리",
+        "지각 사유 등록",
+        "설문 링크",
+        "응답 현황"
+    ]
+)
+
+
+# ==================================
+# 설문 페이지: ?survey=1
+# ==================================
+if "survey" in st.query_params:
+    try:
+        report_id = int(st.query_params["survey"])
+    except (ValueError, TypeError):
+        report_id = -1
+
+    with sqlite3.connect(DB) as conn:
+        conn.row_factory = sqlite3.Row
+        report = conn.execute("""
+            SELECT r.*, s.name, s.class_name
+            FROM reports r
+            JOIN students s ON s.id = r.student_id
+            WHERE r.id = ?
+        """, (report_id,)).fetchone()
+
+    st.header("📝 지각 사유 설문지")
+    st.write("아래 질문에 정확하게 답변해 주세요.")
+
+    if report is None:
+        st.error("설문을 찾을 수 없습니다. 선생님께 문의해 주세요.")
+
+    elif report["status"] == "응답 완료":
+        st.success("이미 제출된 설문입니다.")
+
+    else:
+        with st.form("late_survey"):
+            student_info = st.text_input(
+                "1. 학번",
+                placeholder="예: 홍길동 11111"
+            )
+
+            reason = st.selectbox(
+                "2. 지각 사유는?",
+                [
+                    "선택해 주세요",
+                    "늦잠",
+                    "교통 문제",
+                    "건강 문제",
+                    "가정 사정",
+                    "기타"
+                ]
+            )
+
+            detail = st.text_area(
+                "추가 설명 (선택사항)",
+                placeholder="지각 사유를 자세히 작성해 주세요."
+            )
+
+            submitted = st.form_submit_button("설문 제출")
+
+        if submitted:
+            if not student_info.strip():
+                st.error("학번을 입력해 주세요.")
+
+            elif reason == "선택해 주세요":
+                st.error("지각 사유를 선택해 주세요.")
+
+            else:
+                with sqlite3.connect(DB) as conn:
+                    conn.execute("""
+                        UPDATE reports
+                        SET student_info = ?,
+                            reason = ?,
+                            detail = ?,
+                            status = '응답 완료'
+                        WHERE id = ?
+                    """, (
+                        student_info.strip(),
+                        reason,
+                        detail.strip(),
+                        report_id
+                    ))
+
+                st.success("설문이 정상적으로 제출되었습니다!")
+
+    st.stop()
+
+
+# ==================================
+# 대시보드
+# ==================================
+if page == "대시보드":
+    reports = get_reports()
+    now = datetime.now()
+
+    pending = [
+        r for r in reports
+        if r["status"] == "응답 대기"
+    ]
+
+    overdue = [
+        r for r in pending
+        if r["due_at"]
+        and datetime.fromisoformat(r["due_at"]) < now
+    ]
+
+    a, b, c = st.columns(3)
+    a.metric("전체 요청", len(reports))
+    b.metric("응답 대기", len(pending))
+    c.metric("기한 경과 · 확인 필요", len(overdue))
+
+    st.subheader("최근 요청")
+
+    if reports:
+        st.dataframe([
+            {
+                "학급": r["class_name"],
+                "학생": r["name"],
+                "날짜": r["report_date"],
+                "상태": r["status"]
+            }
+            for r in reports
+        ], use_container_width=True, hide_index=True)
+    else:
+        st.info("등록된 요청이 없습니다.")
+
+
+# ==================================
+# 학생 관리
+# ==================================
+elif page == "학생 관리":
+    st.header("학생 관리")
+
+    with st.form("student_form"):
+        name = st.text_input("학생 이름")
+        class_name = st.text_input("학급 (예: 1-3)")
+        student_phone = st.text_input("학생 전화번호")
+        parent_phone = st.text_input("보호자 전화번호")
+
+        save = st.form_submit_button("학생 등록")
+
+    if save:
+        if not name.strip() or not class_name.strip():
+            st.error("학생 이름과 학급을 입력해 주세요.")
+        else:
+            with sqlite3.connect(DB) as conn:
+                conn.execute("""
+                    INSERT INTO students
+                    (name, class_name, student_phone, parent_phone)
+                    VALUES (?, ?, ?, ?)
+                """, (
+                    name.strip(),
+                    class_name.strip(),
+                    student_phone.strip(),
+                    parent_phone.strip()
+                ))
+
+            st.success("학생 등록 완료!")
+            st.rerun()
+
+    students = get_students()
+
+    if students:
+        st.subheader("등록된 학생")
+        st.dataframe([
+            {
+                "학급": s["class_name"],
+                "이름": s["name"],
+                "학생 연락처": "등록됨" if s["student_phone"] else "미등록",
+                "보호자 연락처": "등록됨" if s["parent_phone"] else "미등록"
+            }
+            for s in students
+        ], use_container_width=True, hide_index=True)
+
+
+# ==================================
+# 지각 사유 등록
+# ==================================
+elif page == "지각 사유 등록":
+    st.header("지각 사유 요청 등록")
+
+    students = get_students()
+
+    if not students:
+        st.warning("먼저 학생을 등록해 주세요.")
+
+    else:
+        options = {
+            f"{s['class_name']} {s['name']} (ID {s['id']})": s["id"]
+            for s in students
+        }
+
+        with st.form("report_form"):
+            selected = st.selectbox(
+                "학생 선택",
+                list(options.keys())
+            )
+
+            report_date = st.date_input(
+                "지각 날짜",
+                date.today()
+            )
+
+            due_date = st.date_input(
+                "응답 마감일",
+                date.today() + timedelta(days=1)
+            )
+
+            due_time = st.time_input(
+                "응답 마감 시간",
+                datetime.strptime("18:00", "%H:%M").time()
+            )
+
+            create = st.form_submit_button("요청 등록")
+
+        if create:
+            due_at = datetime.combine(
+                due_date, due_time
+            ).isoformat(timespec="minutes")
+
+            with sqlite3.connect(DB) as conn:
+                conn.execute("""
+                    INSERT INTO reports
+                    (student_id, report_date, status, due_at)
+                    VALUES (?, ?, '응답 대기', ?)
+                """, (
+                    options[selected],
+                    report_date.isoformat(),
+                    due_at
+                ))
+
+                report_id = conn.execute(
+                    "SELECT last_insert_rowid()"
+                ).fetchone()[0]
+
+            st.success("지각 사유 요청이 등록되었습니다.")
+
+            # 현재 사이트 주소에 ?survey=요청번호 연결
+            base_url = (
+                st.context.url
+                .split("?")[0]
+                .split("#")[0]
+            )
+
+            survey_link = f"{base_url}?survey={report_id}"
+
+            st.subheader("설문 링크")
+            st.code(survey_link, language="text")
+            st.link_button("설문 페이지 열기", survey_link)
+
+
+# ==================================
+# 설문 링크 목록
+# ==================================
+elif page == "설문 링크":
+    st.header("설문 링크")
+
+    reports = get_reports()
+
+    if not reports:
+        st.info("먼저 지각 사유 요청을 등록해 주세요.")
+
+    else:
+        base_url = (
+            st.context.url
+            .split("?")[0]
+            .split("#")[0]
+        )
+
+        for r in reports:
+            link = f"{base_url}?survey={r['id']}"
+
+            with st.expander(
+                f"{r['name']} · {r['report_date']} · {r['status']}"
+            ):
+                st.code(link, language="text")
+                st.link_button(
+                    "설문 열기",
+                    link,
+                    key=f"survey_link_{r['id']}"
+                )
+
+
+# ==================================
+# 응답 현황
+# ==================================
+elif page == "응답 현황":
+    st.header("응답 현황")
+
+    reports = get_reports()
+    now = datetime.now()
+
+    if not reports:
+        st.info("등록된 요청이 없습니다.")
+
+    for r in reports:
+        expired = (
+            r["status"] == "응답 대기"
+            and r["due_at"]
+            and datetime.fromisoformat(r["due_at"]) < now
+        )
+
+        status = (
+            "기한 경과 · 확인 필요"
+            if expired else r["status"]
+        )
+
+        with st.expander(
+            f"{r['class_name']} {r['name']} · {status}"
+        ):
+            st.write("날짜:", r["report_date"])
+            st.write("마감:", r["due_at"])
+
+            if r["status"] == "응답 완료":
+                st.write("학번:", r["student_info"])
+                st.write("지각 사유:", r["reason"])
+                st.write("추가 설명:", r["detail"] or "없음")
+
+            elif expired:
+                st.warning(
+                    "응답 기한이 지났습니다. "
+                    "담당 교사가 확인한 뒤 처리해 주세요."
+                )
+
+st.sidebar.caption("지각알리미.py · 시제품")
