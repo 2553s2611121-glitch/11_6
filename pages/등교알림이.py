@@ -32,7 +32,7 @@ st.markdown("""
         color: #1b4332 !important;
     }
     
-    /* 결석자/미등교 경고 카드 (포인트 초록/올리브 톤) */
+    /* 결석자/미등교 경고 카드 */
     .stAlert {
         border-radius: 8px;
     }
@@ -67,9 +67,7 @@ if "students" not in st.session_state:
 # 3. 메인 화면 3컬럼 레이아웃 구성
 col_left, col_center, col_right = st.columns([1, 1.2, 1])
 
-# ==========================================
 # [왼쪽 컬럼] 검색 및 실시간 미등교 학생 관리
-# ==========================================
 with col_left:
     st.title("🏫 등교 알림이")
     st.caption(f"🌿 {datetime.date.today().strftime('%Y년 %m월 %d일')}")
@@ -116,9 +114,7 @@ with col_left:
                 st.success("출결 정보가 변경되었습니다.")
                 st.rerun()
 
-# ==========================================
 # [중앙 컬럼] 오늘의 학급 현황 및 학교 시간표
-# ==========================================
 with col_center:
     total_cnt = len(st.session_state.students)
     absent_cnt = sum(1 for s in st.session_state.students if s["상태"] == "결석")
@@ -148,9 +144,7 @@ with col_center:
     ]
     st.table(pd.DataFrame(timetable_data))
 
-# ==========================================
 # [오른쪽 컬럼] 통계 대보 및 설정
-# ==========================================
 with col_right:
     st.subheader("📈 주간 결석 통계")
     
@@ -160,13 +154,10 @@ with col_right:
         "결석 건수": [2, 1, 4, 3, 1]
     }).set_index("요일")
     
-    # 막대 그래프 출력 (Streamlit 기본 차트 사용)
+    # 막대 그래프 출력
     st.bar_chart(chart_data, color="#2d6a4f")
     
     st.divider()
     
     st.subheader("⚙️ 설정 및 관리")
-    st.button("👤 계정 정보 관리", use_container_width=True)
-    st.button("🔔 알림 수신 설정", use_container_width=True)
-    st.button("📄 출결 보고서 다운로드 (CSV)", use_container_width=True)
-    st.button("💾 데이터 백업 및 복원", use_container_width=True)
+    st.button("👤 계정 정보
