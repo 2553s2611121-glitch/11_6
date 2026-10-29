@@ -160,4 +160,7 @@ with col_right:
     st.divider()
     
     st.subheader("⚙️ 설정 및 관리")
-    st.button("👤 계정 정보
+    st.button("👤 계정 정보 관리", use_container_width=True)
+    st.button("🔔 알림 수신 설정", use_container_width=True)
+    st.button("📄 출결 보고서 다운로드 (CSV)", use_container_width=True)
+    st.button("💾 데이터 백업 및 복원", use_container_width=True)
