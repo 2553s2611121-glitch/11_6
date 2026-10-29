@@ -290,4 +290,38 @@ elif page == "응답 현황":
                     st.rerun()
 
 st.sidebar.caption("지각알리미 · 시제품")
+import streamlit as st
 
+st.title("⏰ 지각알리미 설문지")
+st.write("지각 사유를 정확하게 작성해 주세요.")
+
+with st.form("late_survey"):
+    student_info = st.text_input(
+        "1. 학번",
+        placeholder="예: 홍길동 11111"
+    )
+
+    reason = st.selectbox(
+        "2. 지각 사유는?",
+        [
+            "교통 문제",
+            "늦잠",
+            "건강 문제",
+            "가정 사정",
+            "기타"
+        ]
+    )
+
+    detail = st.text_area("추가 설명 (선택사항)")
+
+    submitted = st.form_submit_button("설문 제출")
+
+if submitted:
+    if not student_info.strip():
+        st.error("학번을 입력해 주세요.")
+    else:
+        st.success("설문이 제출되었습니다!")
+        st.write("학번:", student_info)
+        st.write("지각 사유:", reason)
+        if detail.strip():
+            st.write("추가 설명:", detail)
